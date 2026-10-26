@@ -17,7 +17,8 @@
 支持 Windows 10 / 11 x64。
 
 - **ZIP 版本**：解压整个 `四季待办-1.0.0-win.zip` 到普通可写目录，双击 `四季待办.exe`。不要只移动 EXE，其他文件也是运行依赖。
-- **安装版 / 单文件便携版**：推送 `main` 后，GitHub Actions 的 **Windows app** 工作流生成 `siji-todo-windows` 下载产物，包含 Setup 安装程序和便携 EXE。也可从 Actions 手动运行。需仓库启用 Actions；本项目不自动创建 Release。
+- **安装版 / 单文件便携版**：推送 `main` 后，GitHub Actions 的 **Windows app** 工作流生成 `siji-todo-windows` 下载产物，包含 Setup 安装程序、便携 EXE 和 ZIP。也可从 Actions 手动运行。需仓库启用 Actions。
+- **版本下载**：推送 `v*` 标签后，工作流构建并将 `siji-todo-windows-x64.zip` 上传到对应的 GitHub Release。Release 下载地址仅在工作流成功完成后可用。
 - 初次安装或下载安装包需要网络，安装后使用无需网络。
 - 当前构建没有代码签名证书。
 

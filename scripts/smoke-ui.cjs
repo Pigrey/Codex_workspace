@@ -16,9 +16,11 @@ const {validate}=require('../src/model.cjs');
   res.end(fs.readFileSync(path.resolve(__dirname,'../src',files[name])));
  });
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
- const browser=await chromium.launch({headless:true, ...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{}),args:['--no-sandbox']});
+ let browser;
  try {
+ browser=await chromium.launch({headless:true, ...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{}),args:['--no-sandbox']});
  const page=await browser.newPage({viewport:{width:1220,height:820}});
+ page.setDefaultTimeout(15000);
  await page.exposeFunction('recordSave',(previous,next)=>validate(recordChanges(previous,next)));
  await page.exposeFunction('makeJournal',(state,day)=>markdown(state,day));
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -96,5 +98,5 @@ const {validate}=require('../src/model.cjs');
  if(process.env.SCREENSHOT_PATH)await page.screenshot({path:process.env.SCREENSHOT_PATH,fullPage:true});
  assert.deepEqual(errors,[]);
  console.log('PASS: 分组、任务、子任务、编辑、持久化适配、四象限、搜索、完成、删除与分组迁移、子任务按钮同行与收起、每日记录、删除后历史保留、按日/全部 Markdown 导出；无浏览器异常');
- } finally { await browser.close(); server.close(); }
+ } finally { try { await browser?.close(); } finally { server.close(); } }
 })().catch(e=>{console.error(e);process.exitCode=1;});

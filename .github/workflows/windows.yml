@@ -8,7 +8,7 @@ permissions:
   contents: write
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -17,19 +17,24 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - run: npx playwright install chromium
+      - run: npx playwright install --with-deps chromium
       - run: npm run test:ui
-      - run: npm run dist:win
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      - name: Create downloadable Windows ZIP
-        run: Compress-Archive -Path dist/win-unpacked/* -DestinationPath dist/siji-todo-windows-x64.zip
+      - name: Build Windows offline ZIP
+        run: |
+          set -o pipefail
+          npx electron-builder --win zip --config.win.signAndEditExecutable=false --config.artifactName=siji-todo-windows-x64.zip 2>&1 | tee build.log
+      - name: Include build diagnostics
+        if: failure()
+        run: |
+          if [ -f build.log ]; then
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            tail -100 build.log >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: siji-todo-windows
-          path: |
-            dist/*.exe
-            dist/*.zip
+          path: dist/*.zip
           if-no-files-found: error
       - name: Publish version download
         if: startsWith(github.ref, 'refs/tags/v')

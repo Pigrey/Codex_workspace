@@ -41,6 +41,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: 四季待办 ${{ github.ref_name }}
-          body: Windows 10 / 11 x64 离线版本。下载 ZIP 后完整解压，运行「四季待办.exe」。提醒需要应用保持运行。
+          body: Windows 10 / 11 x64 离线版本。下载 ZIP 后完整解压，运行「四季待办.exe」。支持标签行子任务按钮、按日期查看操作记录和导出 Markdown。旧版事项保留，历史从升级后的操作开始记录。升级前请先导出 JSON 备份并退出旧应用。提醒需要应用保持运行。
           files: dist/siji-todo-windows-x64.zip
           fail_on_unmatched_files: true

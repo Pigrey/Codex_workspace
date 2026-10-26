@@ -1,6 +1,7 @@
 const $ = s => document.querySelector(s);
 const names = ['','重要且紧急','重要不紧急','紧急不重要','不重要不紧急'];
-let state, view = 'all', editId;
+let state, view = 'all', editId, journalRequest = 0;
+const expandedSubtasks = new Set();
 const el = (tag, cls, text) => { const n = document.createElement(tag); if(cls)n.className=cls; if(text!==undefined)n.textContent=text; return n; };
 const uid = () => crypto.randomUUID();
 function message(s) { $('#status').textContent=s; }
@@ -11,6 +12,10 @@ async function change(fn) {
 }
 function options(select, value) { select.replaceChildren(...state.groups.map(g => { const o=el('option','',g.name); o.value=g.id; return o; })); if(state.groups.some(g=>g.id===value))select.value=value; }
 function render() {
+  const journal = view === 'journal';
+  $('.composer').hidden = journal;
+  $('#search').hidden = journal;
+  $('#journal-controls').hidden = !journal;
   const selected=$('#group').value;
   options($('#group'),view.startsWith('group:')?view.slice(6):selected);
   $('#total').textContent=state.tasks.filter(t=>!t.done).length;
@@ -20,7 +25,8 @@ function render() {
     const b=el('button','','○　'+g.name); b.onclick=()=>{view='group:'+g.id;render();};row.append(b);
     if(g.id!=='inbox') { const d=el('button','remove','×');d.title='删除清单（任务移至收件箱）';d.onclick=()=>{if(confirm('删除“'+g.name+'”？其中任务将移至收件箱。'))change(()=>{state.tasks.forEach(t=>{if(t.groupId===g.id)t.groupId='inbox';});state.groups=state.groups.filter(x=>x.id!==g.id);if(view==='group:'+g.id)view='all';});};row.append(d); }return row;
   }));
-  $('#heading').textContent=({all:'全部待办',today:'今日提醒',matrix:'四象限',done:'已完成'})[view] || state.groups.find(g=>'group:'+g.id===view)?.name || '全部待办';
+  $('#heading').textContent=({all:'全部待办',today:'今日提醒',matrix:'四象限',done:'已完成',journal:'每日记录'})[view] || state.groups.find(g=>'group:'+g.id===view)?.name || '全部待办';
+  if (journal) { renderJournal(); return; }
   const query=$('#search').value.trim().toLocaleLowerCase();
   const today=new Date().toLocaleDateString();
   const filtered=state.tasks.filter(t=>{
@@ -40,11 +46,12 @@ function card(t) {
   const check=el('input','check');check.type='checkbox';check.checked=t.done;check.setAttribute('aria-label','完成 '+t.title);check.onchange=()=>change(()=>{t.done=check.checked;});
   const body=el('div','task-content');body.append(el('div','task-title',t.title));const meta=el('div','meta');
   meta.append(el('span','tag q'+t.quadrant,names[t.quadrant]),el('span','',state.groups.find(g=>g.id===t.groupId)?.name));
+  if(!t.done){const addChild=el('button','add-child','＋ 子任务');addChild.title='添加子任务';addChild.setAttribute('aria-expanded',String(expandedSubtasks.has(t.id)));addChild.onclick=()=>{if(expandedSubtasks.has(t.id))expandedSubtasks.delete(t.id);else expandedSubtasks.add(t.id);render();if(expandedSubtasks.has(t.id))document.getElementById('sub-'+t.id)?.focus();};meta.append(addChild);}
   if(t.remindAt)meta.append(el('span','', '◷ '+new Date(t.remindAt).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+(t.notified?' · 已提醒':'')));
   if(t.children.length)meta.append(el('span','',`${t.children.filter(c=>c.done).length}/${t.children.length} 子任务`));body.append(meta);
   const actions=el('div','actions');const edit=el('button','','编辑');edit.onclick=()=>openEdit(t);const del=el('button','','删除');del.onclick=()=>{if(confirm('删除任务“'+t.title+'”及其子任务？'))change(()=>{state.tasks=state.tasks.filter(x=>x.id!==t.id);});};actions.append(edit,del);head.append(check,body,actions);box.append(head);
   const children=el('div','children');t.children.forEach(c=>{const row=el('div','child'+(c.done?' completed':''));const cb=el('input');cb.type='checkbox';cb.checked=c.done;cb.setAttribute('aria-label','完成子任务 '+c.title);cb.onchange=()=>change(()=>{c.done=cb.checked;});const d=el('button','','×');d.setAttribute('aria-label','删除子任务 '+c.title);d.onclick=()=>change(()=>{t.children=t.children.filter(x=>x.id!==c.id);});row.append(cb,el('span','',c.title),d);children.append(row);});
-  if(!t.done){const form=el('form','sub-form');const input=el('input');input.placeholder='＋ 添加子任务';input.setAttribute('aria-label','子任务名称');input.maxLength=200;input.required=true;const add=el('button','','添加');form.append(input,add);form.onsubmit=e=>{e.preventDefault();const title=input.value.trim();if(title)change(()=>t.children.push({id:uid(),title,done:false}));};children.append(form);}if(children.childNodes.length)box.append(children);return box;
+  if(!t.done && expandedSubtasks.has(t.id)){const form=el('form','sub-form');const input=el('input');input.id='sub-'+t.id;input.placeholder='输入子任务名称';input.setAttribute('aria-label','子任务名称');input.maxLength=200;input.required=true;const add=el('button','','添加');form.append(input,add);form.onsubmit=e=>{e.preventDefault();const title=input.value.trim();if(title)change(()=>{t.children.push({id:uid(),title,done:false});expandedSubtasks.delete(t.id);});};children.append(form);}if(children.childNodes.length)box.append(children);return box;
 }
 function localDate(iso){if(!iso)return '';const d=new Date(iso);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);}
 function openEdit(t){editId=t.id;$('#edit-title').value=t.title;options($('#edit-group'),t.groupId);$('#edit-quadrant').value=t.quadrant;$('#edit-reminder').value=localDate(t.remindAt);$('#edit-dialog').showModal();}
@@ -61,3 +68,27 @@ $('#import').onclick=async()=>{try{const s=await window.todo.import();if(s){stat
 $('#date').textContent=new Date().toLocaleDateString('zh-CN',{month:'long',day:'numeric',weekday:'long'});
 window.todo.onChange(s=>{state=s;render();});
 window.todo.load().then(s=>{state=s;render();}).catch(e=>message('读取失败：'+e.message));
+
+async function renderJournal() {
+  const request = ++journalRequest;
+  const day = $('#journal-day').value;
+  $('#summary').textContent = `${day} · 每天做过的事，都留有记录`;
+  const root = $('#tasks');
+  root.replaceChildren(el('div','empty','正在读取每日记录…'));
+  try {
+    const content = await window.todo.journal(day);
+    if (view !== 'journal' || request !== journalRequest) return;
+    root.replaceChildren(el('pre','journal-preview',content));
+  } catch(e) {
+    if(view === 'journal' && request === journalRequest)root.replaceChildren(el('div','empty','读取失败：'+e.message));
+  }
+}
+$('#journal-day').value = localDate(new Date().toISOString()).slice(0,10);
+$('#journal-day').onchange=()=>{if($('#journal-day').value)renderJournal();};
+$('#journal-today').onclick=()=>{$('#journal-day').value=localDate(new Date().toISOString()).slice(0,10);renderJournal();};
+async function exportJournal(day) {
+  try { if(await window.todo.exportMarkdown(day))message('Markdown 已导出'); }
+  catch(e) { message('导出失败：'+e.message); }
+}
+$('#export-day').onclick=()=>exportJournal($('#journal-day').value);
+$('#export-history').onclick=()=>exportJournal(null);

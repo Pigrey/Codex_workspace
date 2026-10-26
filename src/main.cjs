@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, Notification, Tray, Menu, nativeImage, dial
 const fs = require('node:fs');
 const path = require('node:path');
 const { empty, validate, due } = require('./model.cjs');
+const { recordChanges, markdown } = require('./journal.cjs');
 let win, tray, state, dataPath, quitting = false;
 app.setAppUserModelId('com.pigrey.siji.todo');
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -56,7 +57,14 @@ function checkReminders() {
   }
 }
 ipcMain.handle('load', () => state);
-ipcMain.handle('save', (_, next) => { persist(next); return state; });
+ipcMain.handle('save', (_, next) => { validate(next); persist(recordChanges(state, next)); return state; });
+ipcMain.handle('journal', (_, day) => markdown(state, day));
+ipcMain.handle('export-markdown', async (_, day) => {
+  const content = markdown(state, day);
+  const r = await dialog.showSaveDialog(win, { defaultPath: `四季待办-${day || '全部每日记录'}.md`, filters: [{name:'Markdown',extensions:['md']}] });
+  if (!r.canceled) fs.writeFileSync(r.filePath, content, 'utf8');
+  return !r.canceled;
+});
 ipcMain.handle('export', async () => {
   const r = await dialog.showSaveDialog(win, { defaultPath: '四季待办备份.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
   if (!r.canceled) fs.writeFileSync(r.filePath, JSON.stringify(state, null, 2));

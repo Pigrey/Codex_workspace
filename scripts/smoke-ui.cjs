@@ -133,7 +133,47 @@ const {validate}=require('../src/model.cjs');
  await page.locator('[data-view=journal]').click();
  await page.locator('.journal-preview').filter({hasText:'删除事项'}).waitFor();
  if(process.env.SCREENSHOT_PATH)await page.screenshot({path:process.env.SCREENSHOT_PATH,fullPage:true});
+ await page.locator('[data-view=issues]').click();
+ assert.equal(await page.locator('#category').inputValue(),'issue');
+ await page.locator('#title').fill('训练精度异常');
+ await page.locator('#reporter').fill('张三');
+ await page.locator('#tracker').fill('李四');
+ assert.equal(await page.locator('#stage').inputValue(),'分析中');
+ assert.deepEqual(await page.locator('#stage option').allTextContents(),['分析中','等待回复','训练中','回归中']);
+ await page.locator('#add-task button[type=submit]').click();
+ await page.locator('.task-title').filter({hasText:'训练精度异常'}).waitFor();
+ assert.match(await page.locator('.meta').innerText(),/提出人：张三/);
+ for(const stage of ['等待回复','训练中','回归中']){
+  await page.locator('.actions').getByText('编辑',{exact:true}).click();
+  await page.locator('#edit-stage').selectOption(stage);
+  await page.locator('#edit-form .primary').click();
+  await page.locator('.issue-stage').filter({hasText:stage}).waitFor();
+ }
+ await page.reload();
+ await page.locator('[data-view=issues]').click();
+ await page.locator('.issue-stage').filter({hasText:'回归中'}).waitFor();
+ await page.locator('#issue-filter').selectOption('分析中');
+ assert.equal(await page.locator('.task').count(),0);
+ await page.locator('#issue-filter').selectOption('回归中');
+ assert.equal(await page.locator('.task').count(),1);
+ for(const name of ['张三','李四']){await page.locator('#search').fill(name);assert.equal(await page.locator('.task').count(),1);}
+ await page.locator('#search').fill('不存在的跟踪人');assert.equal(await page.locator('.task').count(),0);
+ await page.locator('#search').fill('');
+ if(process.env.ISSUE_SCREENSHOT_PATH)await page.screenshot({path:process.env.ISSUE_SCREENSHOT_PATH});
+ await page.locator('[data-view=journal]').click();
+ await page.locator('.journal-preview').filter({hasText:'阶段：回归中'}).waitFor();
+ await page.locator('#export-day').click();
+ await page.waitForFunction(()=>localStorage.getItem('markdown-export')?.includes('阶段：回归中'));
+ const issueMarkdown=await page.evaluate(()=>localStorage.getItem('markdown-export'));
+ for(const text of ['提出人：张三','跟踪人：李四','阶段：分析中','阶段：等待回复','阶段：训练中','阶段：回归中'])assert.ok(issueMarkdown.includes(text));
+ await page.locator('[data-view=all]').click();
+ await page.locator('.actions').getByText('编辑',{exact:true}).click();
+ await page.locator('#edit-category').selectOption('task');
+ await page.locator('#edit-form .primary').click();
+ await page.waitForFunction(()=>document.querySelectorAll('.issue-stage').length===0);
+ await page.locator('[data-view=issues]').click();
+ assert.equal(await page.locator('.task').count(),0);
  assert.deepEqual(errors,[]);
- console.log('PASS: 分组、任务、子任务、编辑、持久化适配、四象限、搜索、完成、删除与分组迁移、子任务按钮同行与收起、每日记录、删除后历史保留、按日/全部 Markdown 导出、今日计划排序/刷新恢复/完成恢复/移出与搜索；无浏览器异常');
+ console.log('PASS: 分组、任务、子任务、编辑、持久化适配、四象限、搜索、完成、删除与分组迁移、子任务按钮同行与收起、每日记录、删除后历史保留、按日/全部 Markdown 导出、今日计划排序/刷新恢复/完成恢复/移出与搜索、问题分类/阶段编辑筛选/人员搜索/日报字段导出；无浏览器异常');
  } finally { try { await browser?.close(); } finally { server.close(); } }
 })().catch(e=>{console.error(e);process.exitCode=1;});

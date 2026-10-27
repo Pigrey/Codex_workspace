@@ -12,6 +12,11 @@ function validate(s) {
   for (const t of s.tasks) {
     if (!t || typeof t.id !== 'string' || !t.id || tasks.has(t.id) || typeof t.title !== 'string' || !t.title.trim() || !ids.has(t.groupId) || ![1,2,3,4].includes(t.quadrant) || typeof t.done !== 'boolean' || !Array.isArray(t.children)) throw Error('任务数据无效');
     tasks.add(t.id);
+    if (t.category !== undefined && !['task','issue'].includes(t.category)) throw Error('事项分类无效');
+    if (t.category === 'issue' && !t.issue) throw Error('缺少问题跟踪字段');
+    if (t.issue !== undefined) {
+      if (!t.issue || typeof t.issue.reporter !== 'string' || typeof t.issue.tracker !== 'string' || !['分析中','等待回复','训练中','回归中'].includes(t.issue.stage)) throw Error('问题跟踪字段无效');
+    }
     if (t.remindAt !== null && (typeof t.remindAt !== 'string' || !Number.isFinite(Date.parse(t.remindAt)))) throw Error('提醒时间无效');
     if (t.notified !== undefined && typeof t.notified !== 'boolean') throw Error('提醒状态无效');
     const children = new Set();

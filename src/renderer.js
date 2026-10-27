@@ -16,6 +16,8 @@ function render() {
   $('.composer').hidden = journal;
   $('#search').hidden = journal;
   $('#journal-controls').hidden = !journal;
+  $('#issue-controls').hidden = view !== 'issues';
+  updateIssueFields();
   const selected=$('#group').value;
   options($('#group'),view.startsWith('group:')?view.slice(6):selected);
   $('#total').textContent=state.tasks.filter(t=>!t.done).length;
@@ -25,16 +27,17 @@ function render() {
     const b=el('button','','○　'+g.name); b.onclick=()=>{view='group:'+g.id;render();};row.append(b);
     if(g.id!=='inbox') { const d=el('button','remove','×');d.title='删除清单（任务移至收件箱）';d.onclick=()=>{if(confirm('删除“'+g.name+'”？其中任务将移至收件箱。'))change(()=>{state.tasks.forEach(t=>{if(t.groupId===g.id)t.groupId='inbox';});state.groups=state.groups.filter(x=>x.id!==g.id);if(view==='group:'+g.id)view='all';});};row.append(d); }return row;
   }));
-  $('#heading').textContent=({all:'全部待办',plan:'今日计划',today:'今日提醒',matrix:'四象限',done:'已完成',journal:'每日记录'})[view] || state.groups.find(g=>'group:'+g.id===view)?.name || '全部待办';
+  $('#heading').textContent=({all:'全部待办',plan:'今日计划',today:'今日提醒',matrix:'四象限',done:'已完成',issues:'问题跟踪',journal:'每日记录'})[view] || state.groups.find(g=>'group:'+g.id===view)?.name || '全部待办';
   if (journal) { renderJournal(); return; }
   const query=$('#search').value.trim().toLocaleLowerCase();
   const today=new Date().toLocaleDateString();
   const source = view==='plan' ? planner.tasks(state,planner.day()) : state.tasks;
   const filtered=source.filter(t=>{
     if(view==='done'?!t.done:t.done)return false;
+    if(view==='issues' && (t.category!=='issue' || ($('#issue-filter').value && t.issue.stage!==$('#issue-filter').value)))return false;
     if(view.startsWith('group:')&&t.groupId!==view.slice(6))return false;
     if(view==='today'&&(!t.remindAt||new Date(t.remindAt).toLocaleDateString()!==today))return false;
-    return !query||[t.title,...t.children.map(c=>c.title)].some(s=>s.toLocaleLowerCase().includes(query));
+    return !query||[t.title,...t.children.map(c=>c.title),...(t.category==='issue'?[t.issue.reporter,t.issue.tracker,t.issue.stage]:[])].some(s=>s.toLocaleLowerCase().includes(query));
   });
   $('#summary').textContent=`${filtered.length} 项${view==='done'?'已完成':'待办'} · 今天也可以从一件小事开始`;
   const root=$('#tasks');root.replaceChildren();
@@ -53,6 +56,7 @@ function card(t) {
   const body=el('div','task-content');body.append(el('div','task-title',t.title));const meta=el('div','meta');
   meta.append(el('span','tag q'+t.quadrant,names[t.quadrant]),el('span','',state.groups.find(g=>g.id===t.groupId)?.name));
   if(!t.done){const addChild=el('button','add-child','＋ 子任务');addChild.title='添加子任务';addChild.setAttribute('aria-expanded',String(expandedSubtasks.has(t.id)));addChild.onclick=()=>{if(expandedSubtasks.has(t.id))expandedSubtasks.delete(t.id);else expandedSubtasks.add(t.id);render();if(expandedSubtasks.has(t.id))document.getElementById('sub-'+t.id)?.focus();};meta.append(addChild);}
+  if(t.category==='issue'){meta.append(el('span','tag issue-stage',t.issue.stage),el('span','issue-person','提出人：'+(t.issue.reporter||'未填写')),el('span','issue-person','跟踪人：'+(t.issue.tracker||'未填写')));}
   if(t.remindAt)meta.append(el('span','', '◷ '+new Date(t.remindAt).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+(t.notified?' · 已提醒':'')));
   if(t.children.length)meta.append(el('span','',`${t.children.filter(c=>c.done).length}/${t.children.length} 子任务`));body.append(meta);
   if(!t.done && view!=='plan'){
@@ -74,14 +78,14 @@ function card(t) {
   if(!t.done && expandedSubtasks.has(t.id)){const form=el('form','sub-form');const input=el('input');input.id='sub-'+t.id;input.placeholder='输入子任务名称';input.setAttribute('aria-label','子任务名称');input.maxLength=200;input.required=true;const add=el('button','','添加');form.append(input,add);form.onsubmit=e=>{e.preventDefault();const title=input.value.trim();if(title)change(()=>{t.children.push({id:uid(),title,done:false});expandedSubtasks.delete(t.id);});};children.append(form);}if(children.childNodes.length)box.append(children);return box;
 }
 function localDate(iso){if(!iso)return '';const d=new Date(iso);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);}
-function openEdit(t){editId=t.id;$('#edit-title').value=t.title;options($('#edit-group'),t.groupId);$('#edit-quadrant').value=t.quadrant;$('#edit-reminder').value=localDate(t.remindAt);$('#edit-dialog').showModal();}
-$('#edit-form').onsubmit=e=>{e.preventDefault();const title=$('#edit-title').value.trim();if(!title)return;change(()=>{const t=state.tasks.find(x=>x.id===editId);const reminder=$('#edit-reminder').value?new Date($('#edit-reminder').value).toISOString():null;if(t.remindAt!==reminder)t.notified=false;Object.assign(t,{title,groupId:$('#edit-group').value,quadrant:Number($('#edit-quadrant').value),remindAt:reminder});});$('#edit-dialog').close();};
+function openEdit(t){editId=t.id;$('#edit-title').value=t.title;options($('#edit-group'),t.groupId);$('#edit-quadrant').value=t.quadrant;$('#edit-reminder').value=localDate(t.remindAt);$('#edit-category').value=t.category||'task';$('#edit-reporter').value=t.issue?.reporter||'';$('#edit-tracker').value=t.issue?.tracker||'';$('#edit-stage').value=t.issue?.stage||'分析中';updateIssueFields();$('#edit-dialog').showModal();}
+$('#edit-form').onsubmit=e=>{e.preventDefault();const title=$('#edit-title').value.trim();if(!title)return;change(()=>{const t=state.tasks.find(x=>x.id===editId);const reminder=$('#edit-reminder').value?new Date($('#edit-reminder').value).toISOString():null;if(t.remindAt!==reminder)t.notified=false;t.category=$('#edit-category').value;if(t.category==='issue'||t.issue)t.issue=readIssue('edit-');Object.assign(t,{title,groupId:$('#edit-group').value,quadrant:Number($('#edit-quadrant').value),remindAt:reminder});});$('#edit-dialog').close();};
 $('#cancel-edit').onclick=()=>$('#edit-dialog').close();
-$('#add-task').onsubmit=e=>{e.preventDefault();const title=$('#title').value.trim();if(!title)return;change(()=>{const taskId=uid();state.tasks.unshift({id:taskId,title,groupId:$('#group').value,quadrant:Number($('#quadrant').value),remindAt:$('#reminder').value?new Date($('#reminder').value).toISOString():null,notified:false,done:false,children:[]});if(view==='plan')planner.add(state,planner.day(),taskId);});$('#title').value='';$('#reminder').value='';};
+$('#add-task').onsubmit=e=>{e.preventDefault();const title=$('#title').value.trim();if(!title)return;change(()=>{const taskId=uid();const category=$('#category').value;state.tasks.unshift({id:taskId,title,category,...(category==='issue'?{issue:readIssue('')} : {}),groupId:$('#group').value,quadrant:Number($('#quadrant').value),remindAt:$('#reminder').value?new Date($('#reminder').value).toISOString():null,notified:false,done:false,children:[]});if(view==='plan')planner.add(state,planner.day(),taskId);});$('#title').value='';$('#reminder').value='';$('#reporter').value='';$('#tracker').value='';$('#stage').value='分析中';};
 $('#add-group').onclick=()=>{$('#group-name').value='';$('#group-dialog').showModal();};
 $('#cancel-group').onclick=()=>$('#group-dialog').close();
 $('#group-form').onsubmit=e=>{e.preventDefault();const name=$('#group-name').value.trim();if(!name)return;change(()=>state.groups.push({id:uid(),name}));$('#group-dialog').close();};
-$('[data-view="all"]').parentElement.querySelectorAll('button').forEach(b=>b.onclick=()=>{view=b.dataset.view;render();});
+$('[data-view="all"]').parentElement.querySelectorAll('button').forEach(b=>b.onclick=()=>{view=b.dataset.view;if(view==='issues')$('#category').value='issue';else $('#category').value='task';render();});
 $('#search').oninput=()=>render();
 $('#export').onclick=async()=>{try{if(await window.todo.export())message('备份已导出');}catch(e){message('导出失败：'+e.message);}};
 $('#import').onclick=async()=>{try{const s=await window.todo.import();if(s){state=s;view='all';render();message('备份已导入');}}catch(e){message('导入失败：'+e.message);}};
@@ -116,3 +120,12 @@ $('#export-history').onclick=()=>exportJournal(null);
 let visibleDay=planner.day();
 function refreshDay(){const day=planner.day();if(day!==visibleDay){visibleDay=day;$('#date').textContent=new Date().toLocaleDateString('zh-CN',{month:'long',day:'numeric',weekday:'long'});if(state)render();}}
 setInterval(refreshDay,30000);window.addEventListener('focus',refreshDay);
+
+function updateIssueFields(){
+  $('#issue-fields').hidden=$('#category').value!=='issue';
+  $('#edit-issue-fields').hidden=$('#edit-category').value!=='issue';
+}
+function readIssue(prefix){return {reporter:$('#'+prefix+'reporter').value.trim(),tracker:$('#'+prefix+'tracker').value.trim(),stage:$('#'+prefix+'stage').value};}
+$('#category').onchange=updateIssueFields;
+$('#edit-category').onchange=updateIssueFields;
+$('#issue-filter').onchange=()=>render();

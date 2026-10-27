@@ -27,7 +27,7 @@ function recordChanges(previous, next, date = new Date()) {
     const old = before.get(t.id);
     if (!old) { add('task-created', t, next.groups); continue; }
     if (old.done !== t.done) add(t.done ? 'task-completed' : 'task-reopened', t, next.groups);
-    if (['title','groupId','quadrant','remindAt'].some(key=>old[key]!==t[key])) add('task-edited', t, next.groups);
+    if (['title','groupId','quadrant','remindAt'].some(key=>old[key]!==t[key]) || (old.category || 'task') !== (t.category || 'task') || JSON.stringify(old.issue) !== JSON.stringify(t.issue)) add('task-edited', t, next.groups);
     const children = new Map(old.children.map(c=>[c.id,c]));
     for (const c of t.children) {
       const prior = children.get(c.id);
@@ -58,6 +58,7 @@ function markdown(state, day = null) {
       const t = e.task;
       lines.push(`### ${e.time} · ${labels[e.kind]}`, '', `- [${t.done?'x':' '}] ${escape(t.title)}`,
         `  - 清单：${escape(e.groupName)}`, `  - 四象限：${quadrants[t.quadrant]}`);
+      if (t.category === 'issue') lines.push('  - 分类：问题跟踪', `  - 提出人：${escape(t.issue.reporter || '未填写')}`, `  - 跟踪人：${escape(t.issue.tracker || '未填写')}`, `  - 阶段：${escape(t.issue.stage)}`);
       if (t.remindAt) lines.push(`  - 提醒：${escape(t.remindAt)}（ISO 时间）`);
       if (e.childTitle) lines.push(`  - 本次子任务：${escape(e.childTitle)}`);
       for (const c of t.children) lines.push(`  - [${c.done?'x':' '}] ${escape(c.title)}`);

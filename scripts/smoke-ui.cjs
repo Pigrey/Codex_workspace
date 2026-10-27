@@ -10,7 +10,7 @@ const {validate}=require('../src/model.cjs');
 (async()=>{
  const server=http.createServer((req,res)=>{
   const name=req.url.split('?')[0];
-  const files={'/':'index.html','/style.css':'style.css','/renderer.js':'renderer.js'};
+  const files={'/':'index.html','/style.css':'style.css','/renderer.js':'renderer.js','/planner.js':'planner.js'};
   if(!files[name]){res.writeHead(404);res.end();return;}
   res.setHeader('Content-Type',name.endsWith('.css')?'text/css':name.endsWith('.js')?'text/javascript':'text/html');
   res.end(fs.readFileSync(path.resolve(__dirname,'../src',files[name])));
@@ -41,10 +41,10 @@ const {validate}=require('../src/model.cjs');
  await page.locator('#add-task button[type=submit]').click();
  await page.locator('.task-title').filter({hasText:'准备离线发布'}).waitFor();
  assert.equal(await page.locator('.sub-form').count(),0);
- const button=await page.locator('.add-child').boundingBox();
+ const button=await page.locator('.add-child[title="添加子任务"]').boundingBox();
  const group=await page.locator('.meta > span').nth(1).boundingBox();
  assert.ok(Math.abs(button.y-group.y)<8,'子任务按钮应和清单标签同行');
- await page.locator('.add-child').click();
+ await page.locator('.add-child[title="添加子任务"]').click();
  await page.locator('.sub-form input').fill('检查安装包');
  await page.locator('.sub-form button').click();
  await page.locator('.child span').filter({hasText:'检查安装包'}).waitFor();
@@ -67,6 +67,43 @@ const {validate}=require('../src/model.cjs');
  assert.equal(await page.locator('.task').count(),1);
  await page.locator('#search').fill('');
  if(process.env.SCREENSHOT_PATH)await page.screenshot({path:process.env.SCREENSHOT_PATH,fullPage:true});
+ await page.locator('[data-view=all]').click();
+ await page.locator('.plan-add').click();
+ await page.locator('[data-view=plan]').click();
+ for(const title of ['第二项','第三项']){
+  await page.locator('#title').fill(title);
+  await page.locator('#add-task button[type=submit]').click();
+  await page.locator('.task-title').filter({hasText:title}).waitFor();
+ }
+ assert.deepEqual(await page.locator('.task-title').allTextContents(),['离线发布已准备','第二项','第三项']);
+ await page.getByRole('button',{name:'上移 第三项',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelectorAll('.task-title')[1]?.textContent==='第三项');
+ await page.reload();
+ await page.locator('[data-view=plan]').click();
+ assert.deepEqual(await page.locator('.task-title').allTextContents(),['离线发布已准备','第三项','第二项']);
+ await page.getByRole('button',{name:'下移 离线发布已准备',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('.task-title')?.textContent==='第三项');
+ assert.equal(await page.getByRole('button',{name:'上移 第三项',exact:true}).isDisabled(),true);
+ await page.locator('#search').fill('第二项');
+ assert.equal(await page.locator('.plan-order').count(),0);
+ await page.locator('#search').fill('');
+ await page.locator('.task-head > input').first().click();
+ await page.locator('.plan-finished').waitFor();
+ assert.equal(await page.locator('.task-title').first().innerText(),'离线发布已准备');
+ const completed=page.locator('.task.done');await completed.locator('.task-head > input').click();
+ await page.waitForFunction(()=>document.querySelector('.task-title')?.textContent==='第三项');
+ if(process.env.PLAN_SCREENSHOT_PATH)await page.screenshot({path:process.env.PLAN_SCREENSHOT_PATH});
+ for(const title of ['第三项','第二项']){
+  const card=page.locator('.task').filter({has:page.locator('.task-title',{hasText:title})});
+  await card.locator('.plan-remove').click();
+  await page.waitForFunction(title=>![...document.querySelectorAll('.task-title')].some(n=>n.textContent===title),title);
+ }
+ await page.locator('[data-view=all]').click();
+ for(const title of ['第三项','第二项']){
+  const card=page.locator('.task').filter({has:page.locator('.task-title',{hasText:title})});
+  page.once('dialog',d=>d.accept());await card.locator('.actions').getByText('删除',{exact:true}).click();
+  await page.waitForFunction(title=>![...document.querySelectorAll('.task-title')].some(n=>n.textContent===title),title);
+ }
  await page.locator('.task-head > input').click();
  await page.locator('[data-view=done]').click();
  await page.locator('.task.done').waitFor();
@@ -97,6 +134,6 @@ const {validate}=require('../src/model.cjs');
  await page.locator('.journal-preview').filter({hasText:'删除事项'}).waitFor();
  if(process.env.SCREENSHOT_PATH)await page.screenshot({path:process.env.SCREENSHOT_PATH,fullPage:true});
  assert.deepEqual(errors,[]);
- console.log('PASS: 分组、任务、子任务、编辑、持久化适配、四象限、搜索、完成、删除与分组迁移、子任务按钮同行与收起、每日记录、删除后历史保留、按日/全部 Markdown 导出；无浏览器异常');
+ console.log('PASS: 分组、任务、子任务、编辑、持久化适配、四象限、搜索、完成、删除与分组迁移、子任务按钮同行与收起、每日记录、删除后历史保留、按日/全部 Markdown 导出、今日计划排序/刷新恢复/完成恢复/移出与搜索；无浏览器异常');
  } finally { try { await browser?.close(); } finally { server.close(); } }
 })().catch(e=>{console.error(e);process.exitCode=1;});

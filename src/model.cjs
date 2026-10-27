@@ -1,5 +1,5 @@
 const { validDay, labels } = require('./journal.cjs');
-const empty = () => ({ version: 1, groups: [{ id: 'inbox', name: '收件箱' }], tasks: [], history: [] });
+const empty = () => ({ version: 1, groups: [{ id: 'inbox', name: '收件箱' }], tasks: [], history: [], plans: {} });
 function validate(s) {
   if (!s || s.version !== 1 || !Array.isArray(s.groups) || !Array.isArray(s.tasks)) throw Error('不支持的备份格式');
   const ids = new Set();
@@ -18,6 +18,12 @@ function validate(s) {
     for (const c of t.children) {
       if (!c || typeof c.id !== 'string' || children.has(c.id) || typeof c.title !== 'string' || !c.title.trim() || typeof c.done !== 'boolean') throw Error('子任务数据无效');
       children.add(c.id);
+    }
+  }
+  if (s.plans !== undefined) {
+    if (!s.plans || typeof s.plans !== 'object' || Array.isArray(s.plans)) throw Error('今日计划无效');
+    for (const [day, order] of Object.entries(s.plans)) {
+      if (!validDay(day) || !Array.isArray(order) || new Set(order).size !== order.length || order.some(id=>typeof id !== 'string' || !tasks.has(id))) throw Error('今日计划排序无效');
     }
   }
   if (s.history !== undefined) {

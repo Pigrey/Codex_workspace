@@ -48,6 +48,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: 四季待办 ${{ github.ref_name }}
-          body: Windows 10 / 11 x64 离线版本。下载 ZIP 后完整解压，运行「四季待办.exe」。支持问题跟踪分类及提出人/跟踪人/阶段字段、今日计划排序、每日记录和 Markdown 导出。旧版事项保留，历史从升级后的操作开始记录。升级前请先导出 JSON 备份并退出旧应用。提醒需要应用保持运行。
+          body: Windows 10 / 11 x64 离线版本。下载 ZIP 后完整解压，运行「四季待办.exe」。今日计划采用双栏工作台：左侧执行队列，右上今日提醒，右下四象限，支持一键加入和收起参考区。保留问题跟踪、每日记录和 Markdown 导出。旧版事项保留，历史从升级后的操作开始记录。升级前请先导出 JSON 备份并退出旧应用。提醒需要应用保持运行。
           files: dist/siji-todo-windows-x64.zip
           fail_on_unmatched_files: true

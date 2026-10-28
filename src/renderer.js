@@ -1,7 +1,9 @@
 const $ = s => document.querySelector(s);
 const names = ['','重要且紧急','重要不紧急','紧急不重要','不重要不紧急'];
-let state, view = 'all', editId, journalRequest = 0;
+let state, view = 'plan', editId, journalRequest = 0;
 const expandedSubtasks = new Set();
+let referenceOpen = true;
+try { referenceOpen = localStorage.getItem('siji-reference-open') !== 'false'; } catch {}
 const el = (tag, cls, text) => { const n = document.createElement(tag); if(cls)n.className=cls; if(text!==undefined)n.textContent=text; return n; };
 const uid = () => crypto.randomUUID();
 function message(s) { $('#status').textContent=s; }
@@ -13,6 +15,13 @@ async function change(fn) {
 function options(select, value) { select.replaceChildren(...state.groups.map(g => { const o=el('option','',g.name); o.value=g.id; return o; })); if(state.groups.some(g=>g.id===value))select.value=value; }
 function render() {
   const journal = view === 'journal';
+  const planning = view === 'plan';
+  $('#planning-panel').hidden = !planning || !referenceOpen;
+  $('#workspace').classList.toggle('planning-layout',planning && referenceOpen);
+  $('#toggle-planning').hidden = !planning;
+  $('#toggle-planning').textContent = referenceOpen ? '收起参考' : '展开参考';
+  $('#toggle-planning').setAttribute('aria-expanded',String(referenceOpen));
+  if(planning)renderPlanningPanel();
   $('.composer').hidden = journal;
   $('#search').hidden = journal;
   $('#journal-controls').hidden = !journal;
@@ -27,26 +36,23 @@ function render() {
     const b=el('button','','○　'+g.name); b.onclick=()=>{view='group:'+g.id;render();};row.append(b);
     if(g.id!=='inbox') { const d=el('button','remove','×');d.title='删除清单（任务移至收件箱）';d.onclick=()=>{if(confirm('删除“'+g.name+'”？其中任务将移至收件箱。'))change(()=>{state.tasks.forEach(t=>{if(t.groupId===g.id)t.groupId='inbox';});state.groups=state.groups.filter(x=>x.id!==g.id);if(view==='group:'+g.id)view='all';});};row.append(d); }return row;
   }));
-  $('#heading').textContent=({all:'全部待办',plan:'今日计划',today:'今日提醒',matrix:'四象限',done:'已完成',issues:'问题跟踪',journal:'每日记录'})[view] || state.groups.find(g=>'group:'+g.id===view)?.name || '全部待办';
+  $('#heading').textContent=({all:'全部待办',plan:'今日计划',done:'已完成',issues:'问题跟踪',journal:'每日记录'})[view] || state.groups.find(g=>'group:'+g.id===view)?.name || '全部待办';
   if (journal) { renderJournal(); return; }
   const query=$('#search').value.trim().toLocaleLowerCase();
-  const today=new Date().toLocaleDateString();
   const source = view==='plan' ? planner.tasks(state,planner.day()) : state.tasks;
   const filtered=source.filter(t=>{
     if(view==='done'?!t.done:t.done)return false;
     if(view==='issues' && (t.category!=='issue' || ($('#issue-filter').value && t.issue.stage!==$('#issue-filter').value)))return false;
     if(view.startsWith('group:')&&t.groupId!==view.slice(6))return false;
-    if(view==='today'&&(!t.remindAt||new Date(t.remindAt).toLocaleDateString()!==today))return false;
-    return !query||[t.title,...t.children.map(c=>c.title),...(t.category==='issue'?[t.issue.reporter,t.issue.tracker,t.issue.stage]:[])].some(s=>s.toLocaleLowerCase().includes(query));
+    return matchesTask(t,query);
   });
   $('#summary').textContent=`${filtered.length} 项${view==='done'?'已完成':'待办'} · 今天也可以从一件小事开始`;
   const root=$('#tasks');root.replaceChildren();
   if(view==='plan'){
     $('#summary').textContent=`${planner.day()} · 按从上到下的顺序逐项处理`;
-    root.append(el('p','plan-help',query?'搜索时暂不调整顺序，清空搜索后可排序。':'从其他清单点击「加入今日」，或在此添加任务。用 ↑ ↓ 安排先后，第一项就是接下来要做的事。'));
+    root.append(el('p','plan-help',query?'搜索时暂不调整顺序，清空搜索后可排序。':'从右侧挑选事项加入，或在上方直接添加；用 ↑ ↓ 调整先后。'));
   }
-  if(view==='matrix') { const grid=el('div','matrix');for(let q=1;q<=4;q++){const p=el('section','quadrant-panel');p.append(el('h2','',names[q]));const items=filtered.filter(t=>t.quadrant===q);items.forEach(t=>p.append(card(t)));if(!items.length)p.append(el('div','empty','暂无任务'));grid.append(p);}root.append(grid); }
-  else if(!filtered.length){const n=el('div','empty');n.append(el('strong','','一张清爽的清单'),el('span','',query?'没有找到匹配的任务':'添加一件待办，开始今天的节奏。'));root.append(n);}
+  if(!filtered.length){const n=el('div','empty');n.append(el('strong','','一张清爽的清单'),el('span','',query?'没有找到匹配的任务':'添加一件待办，开始今天的节奏。'));root.append(n);}
   else filtered.forEach(t=>root.append(card(t)));
   if(view==='plan' && !query){const completed=planner.tasks(state,planner.day(),true);if(completed.length){root.append(el('h2','plan-finished','已完成 · '+completed.length));completed.forEach(t=>root.append(card(t)));}}
 }
@@ -85,7 +91,7 @@ $('#add-task').onsubmit=e=>{e.preventDefault();const title=$('#title').value.tri
 $('#add-group').onclick=()=>{$('#group-name').value='';$('#group-dialog').showModal();};
 $('#cancel-group').onclick=()=>$('#group-dialog').close();
 $('#group-form').onsubmit=e=>{e.preventDefault();const name=$('#group-name').value.trim();if(!name)return;change(()=>state.groups.push({id:uid(),name}));$('#group-dialog').close();};
-$('[data-view="all"]').parentElement.querySelectorAll('button').forEach(b=>b.onclick=()=>{view=b.dataset.view;if(view==='issues')$('#category').value='issue';else $('#category').value='task';render();});
+$('[data-view="all"]').parentElement.querySelectorAll('button').forEach(b=>b.onclick=()=>{view=b.dataset.view;if(view==='issues')$('#category').value='issue';else $('#category').value='task';$('#task-options').open=view==='issues';render();});
 $('#search').oninput=()=>render();
 $('#export').onclick=async()=>{try{if(await window.todo.export())message('备份已导出');}catch(e){message('导出失败：'+e.message);}};
 $('#import').onclick=async()=>{try{const s=await window.todo.import();if(s){state=s;view='all';render();message('备份已导入');}}catch(e){message('导入失败：'+e.message);}};
@@ -129,3 +135,39 @@ function readIssue(prefix){return {reporter:$('#'+prefix+'reporter').value.trim(
 $('#category').onchange=updateIssueFields;
 $('#edit-category').onchange=updateIssueFields;
 $('#issue-filter').onchange=()=>render();
+
+function matchesTask(t,query){
+  return !query || [t.title,...t.children.map(c=>c.title),...(t.category==='issue'?[t.issue.reporter,t.issue.tracker,t.issue.stage]:[])].some(s=>s.toLocaleLowerCase().includes(query));
+}
+function renderPlanningPanel(){
+  const query=$('#search').value.trim().toLocaleLowerCase();
+  const tasks=state.tasks.filter(t=>!t.done && matchesTask(t,query));
+  const reminders=tasks.filter(t=>t.remindAt && planner.day(new Date(t.remindAt))===planner.day()).sort((a,b)=>Date.parse(a.remindAt)-Date.parse(b.remindAt));
+  $('#reminder-count').textContent=reminders.length;
+  $('#matrix-count').textContent=tasks.length;
+  const list=$('#reminder-list');list.replaceChildren();
+  reminders.forEach(t=>list.append(referenceItem(t,true)));
+  if(!reminders.length)list.append(el('p','support-empty',query?'没有匹配的今日提醒':'今天没有提醒'));
+  const matrix=$('#reference-matrix');matrix.replaceChildren();
+  for(let q=1;q<=4;q++){
+    const section=el('section','reference-quadrant q'+q);section.dataset.quadrant=q;
+    const items=tasks.filter(t=>t.quadrant===q);
+    const heading=el('h3','',names[q]);heading.append(el('span','',String(items.length)));section.append(heading);
+    const body=el('div','quadrant-items');items.forEach(t=>body.append(referenceItem(t,false)));
+    if(!items.length)body.append(el('p','support-empty','暂无事项'));
+    section.append(body);matrix.append(section);
+  }
+}
+function referenceItem(t,reminder){
+  const item=el('div','reference-item');item.dataset.taskId=t.id;
+  const content=el('div','reference-content');
+  const title=el('button','reference-title',t.title);title.title='查看或编辑事项';title.setAttribute('aria-label','编辑 '+t.title);title.onclick=()=>openEdit(t);content.append(title);
+  const info=reminder?new Date(t.remindAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}):(state.groups.find(g=>g.id===t.groupId)?.name||'收件箱');
+  content.append(el('span','reference-meta',info+(t.category==='issue'?' · '+t.issue.stage:'')));
+  const included=state.plans?.[planner.day()]?.includes(t.id);
+  const add=el('button','reference-add',included?'✓':'＋');add.disabled=!!included;
+  add.title=included?'已加入今日计划':'加入今日计划';add.setAttribute('aria-label',(included?'已加入今日 ':'加入今日 ')+t.title);
+  add.onclick=()=>change(()=>planner.add(state,planner.day(),t.id));
+  item.append(content,add);return item;
+}
+$('#toggle-planning').onclick=()=>{referenceOpen=!referenceOpen;try{localStorage.setItem('siji-reference-open',String(referenceOpen));}catch{}render();};

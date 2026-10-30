@@ -1,3 +1,7 @@
+2026-10-30 更新：云端新会话请直接使用根目录 `CLOUD_CODEX_PROMPT.md`，Mac 本地会话请先阅读 `docs/MAC_HANDOFF.md`。最新鸿蒙原型和验证结果见 `docs/HARMONY_VALIDATION.md`。
+
+以下保留最初的 Windows 开场指令作为历史记录，不应据此把云端环境识别为 Windows，或认为仓库仍只有桌面源码。
+
 请继续开发“四季待办”的独立鸿蒙版。先完整阅读本仓库的 `docs/HANDOFF.md` 和 `README.md`，核对 Git 状态与实际工具环境，再开始工作。交接文档包含前序所有关键决定、现有成果和验证边界，不需要依赖旧聊天记忆。
 
 已确定：

@@ -1,0 +1,10 @@
+{
+  "app": {
+    "bundleName": "com.pigrey.siji.harmonyprobe",
+    "vendor": "Pigrey",
+    "versionCode": 1000000,
+    "versionName": "1.0.0",
+    "icon": "$media:layered_image",
+    "label": "$string:app_name"
+  }
+}

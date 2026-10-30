@@ -1,6 +1,6 @@
 # 四季待办
 
-> **本地接续 / 鸿蒙版开发**：先阅读 [完整交接文档](docs/HANDOFF.md)。新 Codex 会话可直接使用 [接续开场指令](NEXT_CODEX_PROMPT.md)。当前鸿蒙版尚未实现；该文档明确了目标、验证步骤与现有桌面代码的边界。
+> **鸿蒙版开发 / 跨设备接续**：云端请使用 [云端接续提示词](CLOUD_CODEX_PROMPT.md)，Mac 请阅读 [Mac 接续说明](docs/MAC_HANDOFF.md)。当前已有可编译的原生验证工程与候选同步核心，尚未真机验证或完成可用产品。最新结果见 [验证记录](docs/HARMONY_VALIDATION.md)；[原始交接文档](docs/HANDOFF.md)保留桌面行为和完整需求。
 
 一个无需账号、无需服务器的中文 Windows 离线待办应用。使用 Electron，界面和数据均保存在本机，运行不依赖网络。
 
